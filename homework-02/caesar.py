@@ -51,7 +51,7 @@ def decrypt_caesar(ciphertext: str, shift: int = 3) -> str:
     for ch in ciphertext:
         if ch in abc_lower:
             idx = abc_lower.index(ch)
-            plaintext += abc_lower[(idx - shift) % 26]
+            plaintext += abc_lower[(idx - shift) % 26] # двигаем алфавит(берем остаток от деления, чтобы не выходить за границы алфавита)
         elif ch in abc_upper:
             idx = abc_upper.index(ch)
             plaintext += abc_upper[(idx - shift) % 26]

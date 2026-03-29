@@ -1,3 +1,6 @@
+import encrypt_caesar
+import decrypt_caesar
+
 def encrypt_vigenere(plaintext: str, keyword: str) -> str:
     """
     Encrypts plaintext using a Vigenere cipher.
@@ -11,6 +14,23 @@ def encrypt_vigenere(plaintext: str, keyword: str) -> str:
     """
     ciphertext = ""
     # PUT YOUR CODE HERE
+    abc_lower = "abcdefghijklmnopqrstuvwxyz"
+    abc_upper = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+    
+    for i, ch in enumerate(plaintext):
+        key_ch = keyword[i & len(keyword)]
+
+        # определяем сдвиг
+        if key_ch in abc_lower:
+            shift = abc_lower.index(key_ch)
+        elif key_ch in abc_upper:
+            shift = abc_upper.index(key_ch)
+        else:
+            shift = 0 # если в ключе странный символ
+
+        # шифруем текст
+        ciphertext += encrypt_caesar(ch, shift)
+
     return ciphertext
 
 
@@ -27,4 +47,18 @@ def decrypt_vigenere(ciphertext: str, keyword: str) -> str:
     """
     plaintext = ""
     # PUT YOUR CODE HERE
+    abc_lower = "abcdefghijklmnopqrstuvwxyz"
+    abc_upper = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+    
+    for i, ch in enumerate(ciphertext):
+        key_ch = keyword[i % len(keyword)]
+
+        if key_ch in abc_lower:
+            shift = abc_lower.index(key_ch)
+        elif key_ch in abc_upper:
+            shift = abc_upper.index(key_ch)
+        else:
+            shift = 0
+
+        plaintext += decrypt_caesar(ch, shift)
     return plaintext
