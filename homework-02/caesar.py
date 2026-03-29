@@ -16,11 +16,15 @@ def encrypt_caesar(plaintext: str, shift: int = 3) -> str:
     """
     ciphertext = ""
     # PUT YOUR CODE HERE
-    abc = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+    abc_lower = "abcdefghijklmnopqrstuvwxyz"
+    abc_upper = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
     for ch in plaintext:
-        if ch in abc:
-            letter_code = ord(ch)
-            ciphertext += chr(letter_code + shift % 26)
+        if ch in abc_lower:
+            idx = abc_lower.index(ch)
+            ciphertext += abc_lower[(idx + shift) % 26]
+        elif ch in abc_upper:
+            idx = abc_upper.index(ch)
+            ciphertext += abc_upper[(idx + shift) % 26]
         else:
             ciphertext += ch
 
@@ -42,13 +46,17 @@ def decrypt_caesar(ciphertext: str, shift: int = 3) -> str:
     """
     plaintext = ""
     # PUT YOUR CODE HERE
-    abc = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
-    for ch in plaintext:
-        if ch in abc:
-            letter_code = ord(ch)
-            ciphertext += chr(letter_code - shift % 26)
+    abc_lower = "abcdefghijklmnopqrstuvwxyz"
+    abc_upper = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+    for ch in ciphertext:
+        if ch in abc_lower:
+            idx = abc_lower.index(ch)
+            plaintext += abc_lower[(idx - shift) % 26]
+        elif ch in abc_upper:
+            idx = abc_upper.index(ch)
+            plaintext += abc_upper[(idx - shift) % 26]
         else:
-            ciphertext += ch
+            plaintext += ch
 
     return plaintext
 
