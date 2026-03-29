@@ -1,5 +1,5 @@
-import encrypt_caesar
-import decrypt_caesar
+from caesar import encrypt_caesar
+from caesar import decrypt_caesar
 
 def encrypt_vigenere(plaintext: str, keyword: str) -> str:
     """
@@ -18,7 +18,7 @@ def encrypt_vigenere(plaintext: str, keyword: str) -> str:
     abc_upper = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
     
     for i, ch in enumerate(plaintext):
-        key_ch = keyword[i & len(keyword)]
+        key_ch = keyword[i % len(keyword)] # тут берется буква ключа(пароля), которая соотвествует букве в тексте
 
         # определяем сдвиг
         if key_ch in abc_lower:
@@ -26,7 +26,7 @@ def encrypt_vigenere(plaintext: str, keyword: str) -> str:
         elif key_ch in abc_upper:
             shift = abc_upper.index(key_ch)
         else:
-            shift = 0 # если в ключе странный символ
+            shift = 0 # если в ключе странный символ не из алфавита
 
         # шифруем текст
         ciphertext += encrypt_caesar(ch, shift)
