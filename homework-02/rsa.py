@@ -13,8 +13,13 @@ def is_prime(n: int) -> bool:
     >>> is_prime(8)
     False
     """
-    # PUT YOUR CODE HERE
-    pass
+    if n == 1:
+        return False
+    
+    for d in range(2, int(n**0.5 + 1)):
+        if n % d == 0:
+            return False
+    return True
 
 
 def gcd(a: int, b: int) -> int:
@@ -26,9 +31,9 @@ def gcd(a: int, b: int) -> int:
     >>> gcd(3, 7)
     1
     """
-    # PUT YOUR CODE HERE
-    pass
-
+    while b != 0:
+        a, b = b, a % b
+    return a
 
 def multiplicative_inverse(e: int, phi: int) -> int:
     """
@@ -38,9 +43,38 @@ def multiplicative_inverse(e: int, phi: int) -> int:
     >>> multiplicative_inverse(7, 40)
     23
     """
-    # PUT YOUR CODE HERE
-    pass
 
+    '''
+    Как работает?
+    Мы ищем x и y такие, что Ax + By = d, где d - НОД для A и B
+    Для начал ищем этот самый НОД => в конце алгоритма получаем
+    уравнение 0x + dy = d - оно разрешимо при x=0, y=1.
+    Вносим это в таблицу, а остальные x_i, y_i находим по формулам:
+    x_i = y_i-1
+    y_i = x_i-1 - y_i-1 * (Ai//Bi)
+    В таком случае последнее полученное y_i - это обратный элемент
+    '''
+
+    # простой алгоритм евклида и запись в таблицу
+    a, b = phi, e
+    table = [[a, b, a % b, a // b]]
+
+    while a % b != 0:
+        a, b = b, a % b
+        table.append([a, b, a % b, a // b])
+
+    # расширенный алгоритм евклида(добавляем x и y)
+    table[-1].extend([0, 1]) # x_k = 0, y_k = 1
+
+    for i in range(len(table) - 2, -1, -1):
+        _, _, _, q, x_next, y_next = table[i+1]
+        x_i = y_next
+        y_i = x_next - y_next * table[i][3] # q_i
+        table[i].extend([x_i, y_i])
+
+    # x_0 - это обратный элемент
+    x = table[0][5]
+    return x % phi
 
 def generate_keypair(p: int, q: int) -> tp.Tuple[tp.Tuple[int, int], tp.Tuple[int, int]]:
     if not (is_prime(p) and is_prime(q)):
@@ -48,11 +82,9 @@ def generate_keypair(p: int, q: int) -> tp.Tuple[tp.Tuple[int, int], tp.Tuple[in
     elif p == q:
         raise ValueError("p and q cannot be equal")
 
-    # n = pq
-    # PUT YOUR CODE HERE
+    n = p*q
 
-    # phi = (p-1)(q-1)
-    # PUT YOUR CODE HERE
+    phi = (p-1)*(q-1)
 
     # Choose an integer e such that e and phi(n) are coprime
     e = random.randrange(1, phi)
