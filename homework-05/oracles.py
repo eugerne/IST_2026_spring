@@ -86,23 +86,29 @@ class LogRegL2Oracle(BaseSmoothOracle):
         self.regcoef = regcoef
 
     def func(self, x):
-        m = len(self.b)
-        z = self.matvec_Ax(x)*self.b
-        return np.logaddexp(0, -z).sum()/m + (x@x)*self.regcoef/2
+        Ax = self.matvec_Ax(x)
+        z = self.b * Ax
+        loss = np.mean(np.log(1 + np.exp(-z)))
+        reg = (self.regcoef * np.sum(x**2)) / 2
+        return loss + reg
+        
 
     def grad(self, x):
+        Ax = self.matvec_Ax(x)
+        z = self.b * Ax
+        s = expit(z) - 1
+        sb = s * self.b
+        ATsb = self.matvec_ATx(sb)
         m = len(self.b)
-        z = self.matvec_Ax(x)*self.b
-        y = -self.b / (1 + np.exp(z))
-        return self.matvec_ATx(y)/m + self.regcoef*x
+        return (1 / m) * ATsb + self.regcoef * x
 
     def hess(self, x):
+        Ax = self.matvec_Ax(x)
+        z = self.b * Ax
+        s_new = expit(z) * (1 - expit(z))
+        matrix_part = self.matmat_ATsA(s_new)
         m = len(self.b)
-        z = self.matvec_Ax(x)*self.b
-        sigma = 1/(1+np.exp(-z))
-        s = sigma*(1-sigma)
-        n = len(x)
-        return self.matmat_ATsA(s)/m + self.regcoef*np.eye(n)
+        return (1 / m) * matrix_part + self.regcoef * np.eye(len(x))
 
 
 class LogRegL2OptimizedOracle(LogRegL2Oracle):
@@ -114,14 +120,77 @@ class LogRegL2OptimizedOracle(LogRegL2Oracle):
     """
     def __init__(self, matvec_Ax, matvec_ATx, matmat_ATsA, b, regcoef):
         super().__init__(matvec_Ax, matvec_ATx, matmat_ATsA, b, regcoef)
+        self._cache_x = None
+        self._cache_Ax = None
+        self._cache_d = None
+        self._cache_Ad = None
+
+    def _get_Ax(self, x):
+        # Check if x = cached_x + alpha * cached_d for some alpha
+        if self._cache_x is not None and self._cache_Ad is not None:
+            diff = x - self._cache_x
+            # Check if diff is a scalar multiple of cached_d
+            nrm = np.linalg.norm(self._cache_d)
+            if nrm > 0:
+                alpha = np.dot(diff, self._cache_d) / (nrm ** 2)
+                if np.allclose(diff, alpha * self._cache_d):
+                    return self._cache_Ax + alpha * self._cache_Ad
+
+        if self._cache_x is None or not np.array_equal(self._cache_x, x):
+            self._cache_x = x.copy()
+            self._cache_Ax = self.matvec_Ax(x)
+            self._cache_d = None
+            self._cache_Ad = None
+        return self._cache_Ax
+
+    def _get_Ad(self, x, d):
+        self._get_Ax(x)
+        if self._cache_d is None or not np.array_equal(self._cache_d, d):
+            self._cache_d = d.copy()
+            self._cache_Ad = self.matvec_Ax(d)
+        return self._cache_Ad
+
+    def func(self, x):
+        Ax = self._get_Ax(x)
+        z = self.b * Ax
+        loss = np.mean(np.log(1 + np.exp(-z)))
+        reg = (self.regcoef * np.sum(x**2)) / 2
+        return loss + reg
+
+    def grad(self, x):
+        Ax = self._get_Ax(x)
+        z = self.b * Ax
+        s = expit(z) - 1
+        ATsb = self.matvec_ATx(s * self.b)
+        m = len(self.b)
+        return (1 / m) * ATsb + self.regcoef * x
+
+    def hess(self, x):
+        Ax = self._get_Ax(x)
+        z = self.b * Ax
+        s_new = expit(z) * (1 - expit(z))
+        matrix_part = self.matmat_ATsA(s_new)
+        m = len(self.b)
+        return (1 / m) * matrix_part + self.regcoef * np.eye(len(x))
 
     def func_directional(self, x, d, alpha):
-        # TODO: Implement optimized version with pre-computation of Ax and Ad
-        return None
+        Ax = self._get_Ax(x)
+        Ad = self._get_Ad(x, d)
+        Ax_new = Ax + alpha * Ad
+        x_new = x + alpha * d
+        z = self.b * Ax_new
+        loss = np.mean(np.log(1 + np.exp(-z)))
+        reg = (self.regcoef * np.sum(x_new**2)) / 2
+        return np.squeeze(loss + reg)
 
     def grad_directional(self, x, d, alpha):
-        # TODO: Implement optimized version with pre-computation of Ax and Ad
-        return None
+        Ax = self._get_Ax(x)
+        Ad = self._get_Ad(x, d)
+        Ax_new = Ax + alpha * Ad
+        x_new = x + alpha * d
+        z = self.b * Ax_new
+        s = expit(z) - 1
+        return np.squeeze(np.dot(s * self.b, Ad) / len(self.b) + self.regcoef * np.dot(x_new, d))
 
 
 def create_log_reg_oracle(A, b, regcoef, oracle_type='usual'):
@@ -129,11 +198,13 @@ def create_log_reg_oracle(A, b, regcoef, oracle_type='usual'):
     Auxiliary function for creating logistic regression oracles.
         `oracle_type` must be either 'usual' or 'optimized'
     """
-    matvec_Ax = lambda x: A@x
-    matvec_ATx = lambda x: A.T@x
+    matvec_Ax = lambda x: A.dot(x)
+    matvec_ATx = lambda x: (A.T).dot(x)
 
     def matmat_ATsA(s):
-        return (A.T*s)@A
+        if scipy.sparse.issparse(A):
+            return (A.T).dot(A.multiply(s[:, np.newaxis]))
+        return (A.T).dot(np.diag(s).dot(A))
 
     if oracle_type == 'usual':
         oracle = LogRegL2Oracle
@@ -153,18 +224,18 @@ def grad_finite_diff(func, x, eps=1e-8):
         e_i = (0, 0, ..., 0, 1, 0, ..., 0)
                           >> i <<
     """
-    n = len(x)
-    grad = np.zeros(n)
-
-    fx = func(x)
-
-    for i in range(n):
-        x_eps = x.copy()
-        x_eps[i] += eps
-
-        grad[i] = (func(x_eps) - fx) / eps
-
-    return grad
+    g = np.zeros_like(x)          
+    f_x = func(x)                 
+    
+    for i in range(len(x)):       
+        x_perturbed = x.copy()    
+        x_perturbed[i] += eps     
+        
+        f_perturbed = func(x_perturbed) 
+        g[i] = (f_perturbed - f_x) / eps
+        
+    return g
+    
 
 
 def hess_finite_diff(func, x, eps=1e-5):
@@ -179,25 +250,20 @@ def hess_finite_diff(func, x, eps=1e-5):
                           >> i <<
     """
     n = len(x)
-    hess = np.zeros((n, n))
-
-    fx = func(x)
-
+    H = np.zeros((n, n))
+    f_x = func(x)
     for i in range(n):
-        xi_eps = x.copy()
-        xi_eps[i] += eps
-        fxi = func(xi_eps)
+      for j in range(n):
+        x_i = x.copy()
+        x_i[i]+= eps
+        x_j = x.copy()
+        x_j[j]+= eps
+        x_ij = x.copy()
+        x_ij[i] +=eps
+        x_ij[j] +=eps
+        f_i = func(x_i)
+        f_j = func(x_j)
+        f_ij = func(x_ij)
+        H[i, j] = (f_ij - f_i - f_j + f_x) / (eps**2)
 
-        for j in range(n):
-            xj_eps = x.copy()
-            xj_eps[j] += eps
-            fxj = func(xj_eps)
-
-            xij = x.copy()
-            xij[i] += eps
-            xij[j] += eps
-
-            fxij = func(xij)
-            hess[i, j] = (fxij - fxi - fxj + fx) / eps**2
-
-    return hess
+    return H
